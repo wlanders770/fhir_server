@@ -1,0 +1,11 @@
+{
+  "total_claims": 5000,
+  "total_patients": 2000,
+  "total_cost": 1467171.72,
+  "average_cost": 293.43,
+  "procedure_distribution": {
+    "77065": 1663,
+    "77066": 1660,
+    "77067": 1677
+  }
+}

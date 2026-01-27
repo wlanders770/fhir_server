@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    container_name: fhir-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: fhir
+      POSTGRES_PASSWORD: fhirpass
+      POSTGRES_DB: fhir
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fhir -d fhir"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hapi:
+    image: hapiproject/hapi:v6.10.0
+    container_name: hapi-fhir
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - spring.datasource.url=jdbc:postgresql://db:5432/fhir
+      - spring.datasource.username=fhir
+      - spring.datasource.password=fhirpass
+      - spring.datasource.driverClassName=org.postgresql.Driver
+      - spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+      - hapi.fhir.server_address=http://localhost:8080/fhir/
+      - hapi.fhir.allow_cors=true
+      - hapi.fhir.cors.allowed_origin=*
+    ports:
+      - "8080:8080"
+    # Note: Healthcheck disabled due to minimal base image lacking wget/curl.
+    # Consider enabling with an HTTP probe once tooling is available.
+
+  webapp:
+    build: ./webapp
+    container_name: fhir-webapp
+    restart: unless-stopped
+    depends_on:
+      - hapi
+    environment:
+      - FHIR_BASE_URL=http://hapi-fhir:8080/fhir
+    ports:
+      - "5000:5000"
+
+volumes:
+  db_data:

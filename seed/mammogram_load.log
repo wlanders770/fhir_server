@@ -1,0 +1,23 @@
+nohup: ignoring input
+Waiting for FHIR server at http://localhost:8080/fhir...
+✓ FHIR server is ready
+
+Loading 5,000 claims...
+Batch size: 100, Workers: 2
+  Processed 1,000/5,000 claims (32.8 claims/sec)
+  Processed 2,000/5,000 claims (31.8 claims/sec)
+  Processed 3,000/5,000 claims (30.4 claims/sec)
+  Processed 4,000/5,000 claims (31.1 claims/sec)
+  Processed 5,000/5,000 claims (31.3 claims/sec)
+
+============================================================
+LOAD SUMMARY
+============================================================
+Claims created:        5,000
+Patients created:      4,881
+Practitioners created: 2,163
+Coverage created:      4,881
+Errors:                0
+Elapsed time:          159.9s
+Average rate:          31.3 claims/sec
+============================================================

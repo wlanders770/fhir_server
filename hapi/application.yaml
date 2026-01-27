@@ -1,0 +1,31 @@
+server:
+  servlet:
+    context-path: /fhir
+
+hapi:
+  fhir:
+    version: R4
+    allow_cors: true
+    cors:
+      allowed_origin: "*"
+    rest:
+      server_address: http://localhost:8080/fhir
+    validation:
+      requests_enabled: false
+
+spring:
+  datasource:
+    driverClassName: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    hibernate:
+      ddl-auto: update
+logging:
+  level:
+    ca.uhn.fhir: INFO
+    org.hibernate.SQL: WARN
