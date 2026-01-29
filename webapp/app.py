@@ -8,7 +8,12 @@ from datetime import datetime
 from collections import defaultdict, Counter
 import os
 import io
-from hedis_measure import calculate_hedis_bcs_measure
+from hedis_measure import (
+    calculate_hedis_bcs_measure,
+    calculate_hedis_col_measure,
+    calculate_hedis_cdc_measure,
+    calculate_hedis_cbp_measure
+)
 from chat_agent import create_chat_agent
 
 app = Flask(__name__)
@@ -190,6 +195,7 @@ def get_stats():
         'by_month': dict(sorted(scaled_by_month.items())),
         'cost_by_month': dict(sorted(scaled_cost_by_month.items())),
         'top_patients': dict(sorted(stats['by_patient'].items(), key=lambda x: x[1], reverse=True)[:10]),
+        'unique_patient_count': len(stats['by_patient']),  # Total unique patients
         'top_procedures': dict(stats['top_procedures'].most_common(10)),
         'is_sampled': is_sampled,
         'sample_size': len(all_claims)
@@ -342,6 +348,115 @@ def get_hedis_bcs_measure():
         
         results = calculate_hedis_bcs_measure(FHIR_BASE, max_patients)
         return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/hedis-col')
+def get_hedis_col_measure():
+    """
+    Calculate HEDIS Colorectal Cancer Screening measure.
+    
+    Query parameters:
+    - max_patients: Maximum number of patients to evaluate (default: 500)
+    """
+    try:
+        max_patients = int(request.args.get('max_patients', 500))
+        max_patients = min(max_patients, 2000)
+        
+        results = calculate_hedis_col_measure(FHIR_BASE, max_patients)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/hedis-cdc')
+def get_hedis_cdc_measure():
+    """
+    Calculate HEDIS Comprehensive Diabetes Care measure.
+    
+    Query parameters:
+    - max_patients: Maximum number of patients to evaluate (default: 500)
+    """
+    try:
+        max_patients = int(request.args.get('max_patients', 500))
+        max_patients = min(max_patients, 2000)
+        
+        results = calculate_hedis_cdc_measure(FHIR_BASE, max_patients)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/hedis-cbp')
+def get_hedis_cbp_measure():
+    """
+    Calculate HEDIS Controlling High Blood Pressure measure.
+    
+    Query parameters:
+    - max_patients: Maximum number of patients to evaluate (default: 500)
+    """
+    try:
+        max_patients = int(request.args.get('max_patients', 500))
+        max_patients = min(max_patients, 2000)
+        
+        results = calculate_hedis_cbp_measure(FHIR_BASE, max_patients)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/hedis-summary')
+def get_hedis_summary():
+    """
+    Get summary of all HEDIS measures at once.
+    
+    Query parameters:
+    - max_patients: Maximum number of patients per measure (default: 500)
+    """
+    try:
+        max_patients = int(request.args.get('max_patients', 500))
+        max_patients = min(max_patients, 2000)
+        
+        # Calculate all measures
+        bcs_results = calculate_hedis_bcs_measure(FHIR_BASE, max_patients)
+        col_results = calculate_hedis_col_measure(FHIR_BASE, max_patients)
+        cdc_results = calculate_hedis_cdc_measure(FHIR_BASE, max_patients)
+        cbp_results = calculate_hedis_cbp_measure(FHIR_BASE, max_patients)
+        
+        # Calculate overall star rating based on average compliance
+        rates = []
+        for result in [bcs_results, col_results, cdc_results, cbp_results]:
+            if 'rate' in result and result.get('denominator', 0) > 0:
+                rates.append(result['rate'])
+        
+        avg_rate = sum(rates) / len(rates) if rates else 0
+        
+        if avg_rate >= 90:
+            star_rating = '⭐⭐⭐⭐⭐ (5 Stars - Excellent)'
+        elif avg_rate >= 80:
+            star_rating = '⭐⭐⭐⭐ (4 Stars - Very Good)'
+        elif avg_rate >= 70:
+            star_rating = '⭐⭐⭐ (3 Stars - Good)'
+        elif avg_rate >= 60:
+            star_rating = '⭐⭐ (2 Stars - Fair)'
+        else:
+            star_rating = '⭐ (1 Star - Needs Improvement)'
+        
+        return jsonify({
+            'summary': {
+                'average_rate': round(avg_rate, 2),
+                'star_rating': star_rating,
+                'total_measures': len(rates),
+                'timestamp': datetime.now().isoformat()
+            },
+            'measures': {
+                'breast_cancer_screening': bcs_results,
+                'colorectal_cancer_screening': col_results,
+                'diabetes_care': cdc_results,
+                'blood_pressure_control': cbp_results
+            }
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

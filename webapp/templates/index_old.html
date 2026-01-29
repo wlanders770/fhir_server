@@ -1,0 +1,2352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FHIR Claims Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 280px;
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar h2 {
+            font-size: 1.5em;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .menu-section {
+            margin-bottom: 25px;
+        }
+        
+        .menu-section-title {
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #95a5a6;
+            margin-bottom: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+        
+        .menu-section-title:hover {
+            color: #ecf0f1;
+        }
+        
+        .menu-section-title .arrow {
+            transition: transform 0.3s;
+        }
+        
+        .menu-section-title.collapsed .arrow {
+            transform: rotate(-90deg);
+        }
+        
+        .menu-items {
+            margin-left: 10px;
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        .menu-items.collapsed {
+            max-height: 0;
+        }
+        
+        .menu-item {
+            padding: 12px 15px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+        }
+        
+        .menu-item:hover {
+            background: #34495e;
+            transform: translateX(5px);
+        }
+        
+        .menu-item.active {
+            background: #667eea;
+            font-weight: bold;
+        }
+        
+        .menu-item-icon {
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .content-area {
+            display: none;
+        }
+        
+        .content-area.active {
+            display: block;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #7f8c8d;
+        }
+        
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+        
+        .stat-card h3 {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .chart-card h2 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-size: 1.3em;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .error-message {
+            background: #e74c3c;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .search-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .search-section h2 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        
+        .search-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select {
+            padding: 10px;
+            border: 2px solid #e0e6ed;
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+        }
+        
+        .claims-table {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        
+        .claims-table h2 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        table th,
+        table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e6ed;
+        }
+        
+        table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-cancelled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .mammogram-section {
+            background: linear-gradient(135deg, #ff6b9d 0%, #c06c84 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .mammogram-section h2 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        
+        .mammogram-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .mammogram-stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .mammogram-stat-card h4 {
+            color: #c06c84;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .mammogram-stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #ff6b9d;
+        }
+        
+        .procedure-breakdown {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .procedure-breakdown h3 {
+            color: #c06c84;
+            margin-bottom: 15px;
+        }
+        
+        .procedure-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .procedure-item:last-child {
+            border-bottom: none;
+        }
+        
+        /* HEDIS Measure Section Styles */
+        .hedis-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .hedis-section h2 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        
+        .hedis-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .hedis-stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .hedis-stat-card h4 {
+            color: #667eea;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .hedis-stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .compliance-rate {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .compliance-rate h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .compliance-rate .rate-value {
+            font-size: 3em;
+            font-weight: bold;
+            color: #764ba2;
+        }
+        
+        .compliance-rate .rate-label {
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        .gap-in-care {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .gap-in-care h3 {
+            color: #764ba2;
+            margin-bottom: 15px;
+        }
+        
+        .gap-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .gap-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            background: white;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        
+        .gap-item .patient-name {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .gap-item .patient-age {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        /* Chat Interface Styles */
+        .chat-section {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            color: white;
+        }
+        
+        .chat-section h2 {
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        
+        .chat-container {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+        
+        .chat-main {
+            background: white;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+            overflow: hidden;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        
+        .chat-message {
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .chat-message.user {
+            text-align: right;
+        }
+        
+        .chat-message.assistant {
+            text-align: left;
+        }
+        
+        .message-bubble {
+            display: inline-block;
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .chat-message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: left;
+        }
+        
+        .chat-message.assistant .message-bubble {
+            background: white;
+            color: #2c3e50;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .message-data {
+            display: inline-block;
+            max-width: 90%;
+            margin-top: 10px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            font-size: 0.9em;
+            color: #2c3e50;
+            text-align: left;
+        }
+        
+        .message-data h4 {
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        
+        .message-data h5 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+        
+        .message-data pre {
+            background: #f5f7fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.85em;
+        }
+        
+        .message-data canvas {
+            max-width: 100%;
+            height: auto !important;
+        }
+        
+        .chat-input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+        
+        .chat-send-btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .chat-send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .chat-send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .chat-sidebar {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            color: #2c3e50;
+        }
+        
+        .chat-sidebar h3 {
+            margin-bottom: 15px;
+            color: #11998e;
+            font-size: 1.2em;
+        }
+        
+        .suggestion-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f5f7fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9em;
+            color: #2c3e50;
+        }
+        
+        .suggestion-btn:hover {
+            background: #e8f4f3;
+            border-color: #11998e;
+            transform: translateX(5px);
+        }
+        
+        .export-btn {
+            margin-top: 10px;
+            padding: 10px;
+            background: #11998e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+        }
+        
+        .export-btn:hover {
+            background: #0d7a6e;
+        }
+        
+        .chat-loading {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            padding: 10px;
+        }
+        
+        .chat-loading span {
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        
+        .chat-loading span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+        
+        .chat-loading span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+        
+        @keyframes bounce {
+            0%, 80%, 100% {
+                transform: scale(0);
+            }
+            40% {
+                transform: scale(1);
+            }
+        }
+        
+        /* HEDIS Tabs Styles */
+        .hedis-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .hedis-tab {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .hedis-tab:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        .hedis-tab.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
+        }
+        
+        .hedis-measure-content {
+            display: none;
+        }
+        
+        .hedis-measure-content.active {
+            display: block;
+        }
+        
+        .measure-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        @media (max-width: 1024px) {
+            .measure-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <h2>📊 Dashboard</h2>
+        
+        <div class="menu-section">
+            <div class="menu-section-title" onclick="toggleMenuSection(this)">
+                <span>HEDIS Measures</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="menu-items">
+                <div class="menu-item" onclick="loadMeasure('bcs')">
+                    <span class="menu-item-icon">🩺</span>
+                    <span>Breast Cancer Screening</span>
+                </div>
+                <div class="menu-item" onclick="loadMeasure('col')">
+                    <span class="menu-item-icon">🧬</span>
+                    <span>Colorectal Cancer Screening</span>
+                </div>
+                <div class="menu-item" onclick="loadMeasure('cdc')">
+                    <span class="menu-item-icon">💉</span>
+                    <span>Comprehensive Diabetes Care</span>
+                </div>
+                <div class="menu-item" onclick="loadMeasure('cbp')">
+                    <span class="menu-item-icon">❤️</span>
+                    <span>Blood Pressure Control</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="menu-section">
+            <div class="menu-section-title" onclick="toggleMenuSection(this)">
+                <span>Claims Analytics</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="menu-items">
+                <div class="menu-item" onclick="loadDashboard()">
+                    <span class="menu-item-icon">📈</span>
+                    <span>Overview Dashboard</span>
+                </div>
+                <div class="menu-item" onclick="loadMammograms()">
+                    <span class="menu-item-icon">🔬</span>
+                    <span>Mammogram Claims</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content Area -->
+    <div class="main-content">
+        <header>
+            <h1 id="pageTitle">🏥 FHIR Claims Dashboard</h1>
+            <p id="pageSubtitle">Select a measure or view from the menu</p>
+        </header>
+        
+        <!-- Welcome Screen -->
+        <div id="content-welcome" class="content-area active">
+            <div style="text-align: center; padding: 60px 20px;">
+                <h2 style="font-size: 2em; color: #667eea; margin-bottom: 20px;">Welcome to FHIR Claims Analytics</h2>
+                <p style="font-size: 1.2em; color: #7f8c8d; max-width: 600px; margin: 0 auto;">
+                    Select a HEDIS measure or claims view from the menu on the left to begin analyzing your healthcare data.
+                </p>
+            </div>
+        </div>
+        
+        <!-- BCS Measure Content -->
+        <div id="content-bcs" class="content-area"></div>
+        
+        <!-- COL Measure Content -->
+        <div id="content-col" class="content-area"></div>
+        
+        <!-- CDC Measure Content -->
+        <div id="content-cdc" class="content-area"></div>
+        
+        <!-- CBP Measure Content -->
+        <div id="content-cbp" class="content-area"></div>
+        
+        <!-- Dashboard Content -->
+        <div id="content-dashboard" class="content-area"></div>
+        
+        <!-- Mammogram Content -->
+        <div id="content-mammograms" class="content-area"></div>
+    </div>
+
+    <script>                        <h3 style="color: #667eea; margin-bottom: 15px; text-align: center;">Compliance Breakdown</h3>
+                        <div style="height: 250px;">
+                            <canvas id="hedisComplianceChart-bcs"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hedis-stats">
+                    <div class="hedis-stat-card">
+                        <h4>Eligible Patients</h4>
+                        <div class="value" id="hedisDenominator-bcs">-</div>
+                        <small>Women aged 50-74</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Compliant</h4>
+                        <div class="value" id="hedisNumerator-bcs">-</div>
+                        <small>Had mammogram in 27 months</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Gap in Care</h4>
+                        <div class="value" id="hedisGap-bcs">-</div>
+                        <small>Need screening</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Exclusions</h4>
+                        <div class="value" id="hedisExclusions-bcs">-</div>
+                        <small>Mastectomy history</small>
+                    </div>
+                </div>
+                
+                <div class="gap-in-care" id="gapInCareSection-bcs" style="display:none;">
+                    <h3>Patients Needing Screening (Outreach List)</h3>
+                    <div class="gap-list" id="gapList-bcs"></div>
+                </div>
+            </div>
+            
+            <!-- COL Measure Content -->
+            <div id="measure-col" class="hedis-measure-content">
+                <div class="measure-grid">
+                    <div class="compliance-rate">
+                        <h3>Overall Compliance Rate</h3>
+                        <div class="rate-value" id="hedisRate-col">-</div>
+                        <div class="rate-label" id="hedisLabel-col">Loading...</div>
+                        <div style="margin-top: 15px; color: #666; font-size: 0.9em;">
+                            <strong>Measurement Period:</strong><br>
+                            <span id="hedisPeriod-col">10 years (colonoscopy) / 1 year (FIT)</span>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;">
+                        <h3 style="color: #667eea; margin-bottom: 15px; text-align: center;">Compliance Breakdown</h3>
+                        <div style="height: 250px;">
+                            <canvas id="hedisComplianceChart-col"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hedis-stats">
+                    <div class="hedis-stat-card">
+                        <h4>Eligible Patients</h4>
+                        <div class="value" id="hedisDenominator-col">-</div>
+                        <small>Adults aged 45-75</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Compliant</h4>
+                        <div class="value" id="hedisNumerator-col">-</div>
+                        <small>Had screening</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Gap in Care</h4>
+                        <div class="value" id="hedisGap-col">-</div>
+                        <small>Need screening</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Star Rating</h4>
+                        <div class="value" style="font-size: 1.5em;" id="hedisStars-col">-</div>
+                        <small>Quality score</small>
+                    </div>
+                </div>
+                
+                <div class="gap-in-care" id="gapInCareSection-col" style="display:none;">
+                    <h3>Patients Needing Screening (Outreach List)</h3>
+                    <div class="gap-list" id="gapList-col"></div>
+                </div>
+            </div>
+            
+            <!-- CDC Measure Content -->
+            <div id="measure-cdc" class="hedis-measure-content">
+                <div class="measure-grid">
+                    <div class="compliance-rate">
+                        <h3>Overall Compliance Rate</h3>
+                        <div class="rate-value" id="hedisRate-cdc">-</div>
+                        <div class="rate-label" id="hedisLabel-cdc">Loading...</div>
+                        <div style="margin-top: 15px; color: #666; font-size: 0.9em;">
+                            <strong>Measurement Period:</strong><br>
+                            <span id="hedisPeriod-cdc">1 year lookback</span>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;">
+                        <h3 style="color: #667eea; margin-bottom: 15px; text-align: center;">Compliance Breakdown</h3>
+                        <div style="height: 250px;">
+                            <canvas id="hedisComplianceChart-cdc"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hedis-stats">
+                    <div class="hedis-stat-card">
+                        <h4>Eligible Patients</h4>
+                        <div class="value" id="hedisDenominator-cdc">-</div>
+                        <small>Adults 18-75 with diabetes</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Compliant</h4>
+                        <div class="value" id="hedisNumerator-cdc">-</div>
+                        <small>Had HbA1c test</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Gap in Care</h4>
+                        <div class="value" id="hedisGap-cdc">-</div>
+                        <small>Need testing</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Star Rating</h4>
+                        <div class="value" style="font-size: 1.5em;" id="hedisStars-cdc">-</div>
+                        <small>Quality score</small>
+                    </div>
+                </div>
+                
+                <div class="gap-in-care" id="gapInCareSection-cdc" style="display:none;">
+                    <h3>Patients Needing HbA1c Testing (Outreach List)</h3>
+                    <div class="gap-list" id="gapList-cdc"></div>
+                </div>
+            </div>
+            
+            <!-- CBP Measure Content -->
+            <div id="measure-cbp" class="hedis-measure-content">
+                <div class="measure-grid">
+                    <div class="compliance-rate">
+                        <h3>Overall Compliance Rate</h3>
+                        <div class="rate-value" id="hedisRate-cbp">-</div>
+                        <div class="rate-label" id="hedisLabel-cbp">Loading...</div>
+                        <div style="margin-top: 15px; color: #666; font-size: 0.9em;">
+                            <strong>Measurement Period:</strong><br>
+                            <span id="hedisPeriod-cbp">1 year lookback</span>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;">
+                        <h3 style="color: #667eea; margin-bottom: 15px; text-align: center;">Compliance Breakdown</h3>
+                        <div style="height: 250px;">
+                            <canvas id="hedisComplianceChart-cbp"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hedis-stats">
+                    <div class="hedis-stat-card">
+                        <h4>Eligible Patients</h4>
+                        <div class="value" id="hedisDenominator-cbp">-</div>
+                        <small>Adults 18-85 with hypertension</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Controlled BP</h4>
+                        <div class="value" id="hedisNumerator-cbp">-</div>
+                        <small>BP &lt; 140/90</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Uncontrolled BP</h4>
+                        <div class="value" id="hedisGap-cbp">-</div>
+                        <small>Need management</small>
+                    </div>
+                    <div class="hedis-stat-card">
+                        <h4>Star Rating</h4>
+                        <div class="value" style="font-size: 1.5em;" id="hedisStars-cbp">-</div>
+                        <small>Quality score</small>
+                    </div>
+                </div>
+                
+                <div class="gap-in-care" id="gapInCareSection-cbp" style="display:none;">
+                    <h3>Patients with Uncontrolled BP (Outreach List)</h3>
+                    <div class="gap-list" id="gapList-cbp"></div>
+                </div>
+            </div>
+            
+            <!-- Summary View -->
+            <div id="measure-summary" class="hedis-measure-content">
+                <div style="background: rgba(255, 255, 255, 0.95); padding: 25px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+                    <h3 style="color: #667eea; margin-bottom: 15px;">Overall Quality Performance</h3>
+                    <div class="rate-value" id="hedisSummaryRate">-</div>
+                    <div style="margin-top: 10px; color: #666;">Average Compliance Across All Measures</div>
+                    <div style="margin-top: 15px; font-size: 2em;" id="hedisSummaryStars">-</div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;">
+                        <h4 style="color: #667eea; margin-bottom: 15px;">🩺 Breast Cancer Screening</h4>
+                        <div style="font-size: 2em; font-weight: bold; color: #764ba2;" id="summaryBcsRate">-</div>
+                        <div style="margin-top: 10px; color: #666;">
+                            <div id="summaryBcsDetails">Loading...</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;">
+                        <h4 style="color: #667eea; margin-bottom: 15px;">🧬 Colorectal Cancer Screening</h4>
+                        <div style="font-size: 2em; font-weight: bold; color: #764ba2;" id="summaryColRate">-</div>
+                        <div style="margin-top: 10px; color: #666;">
+                            <div id="summaryColDetails">Loading...</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;">
+                        <h4 style="color: #667eea; margin-bottom: 15px;">💉 Diabetes Care</h4>
+                        <div style="font-size: 2em; font-weight: bold; color: #764ba2;" id="summaryCdcRate">-</div>
+                        <div style="margin-top: 10px; color: #666;">
+                            <div id="summaryCdcDetails">Loading...</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;">
+                        <h4 style="color: #667eea; margin-bottom: 15px;">❤️ Blood Pressure Control</h4>
+                        <div style="font-size: 2em; font-weight: bold; color: #764ba2;" id="summaryCbpRate">-</div>
+                        <div style="margin-top: 10px; color: #666;">
+                            <div id="summaryCbpDetails">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- AI Chat Agent Section -->
+        <div class="chat-section" id="chatSection" style="display:none;">
+            <h2>🤖 AI Chat Agent - Ask About Your Claims Data</h2>
+            <div class="chat-container">
+                <div class="chat-main">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="chat-message assistant">
+                            <div class="message-bubble">
+                                Hi! I'm your AI assistant for FHIR claims data. I can help you:
+                                <ul style="margin: 10px 0 0 20px; line-height: 1.8;">
+                                    <li>Query claims and generate reports</li>
+                                    <li>Show statistics and trends</li>
+                                    <li>Export data to spreadsheets (CSV)</li>
+                                    <li>Create charts and visualizations</li>
+                                    <li>Search by procedure or diagnosis</li>
+                                </ul>
+                                Try asking me something, or click a suggestion on the right!
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input 
+                            type="text" 
+                            class="chat-input" 
+                            id="chatInput" 
+                            placeholder="Ask about your claims data..."
+                            onkeypress="if(event.key==='Enter') sendChatMessage()"
+                        >
+                        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()">
+                            Send
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="chat-sidebar">
+                    <h3>💡 Quick Actions</h3>
+                    <div id="chatSuggestions"></div>
+                    
+                    <h3 style="margin-top: 25px;">📊 Export Options</h3>
+                    <button class="export-btn" onclick="exportChatData('claims')">
+                        📄 Export Claims CSV
+                    </button>
+                    <button class="export-btn" onclick="exportChatData('summary')">
+                        📋 Export Summary Report
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h2>📊 Claims by Month</h2>
+                <div class="chart-container">
+                    <canvas id="claimsByMonthChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <h2>💰 Cost Trend</h2>
+                <div class="chart-container">
+                    <canvas id="costTrendChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <h2>🩺 Top Procedures</h2>
+                <div class="chart-container">
+                    <canvas id="proceduresChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <h2>📋 Status Distribution</h2>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="search-section">
+            <h2>🔍 Search Claims</h2>
+            <form class="search-form" id="searchForm">
+                <div class="form-group">
+                    <label for="status">Status</label>
+                    <select id="status" name="status">
+                        <option value="">All</option>
+                        <option value="active">Active</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="draft">Draft</option>
+                        <option value="entered-in-error">Entered in Error</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="created_from">Created From</label>
+                    <input type="date" id="created_from" name="created_from">
+                </div>
+                
+                <div class="form-group">
+                    <label for="created_to">Created To</label>
+                    <input type="date" id="created_to" name="created_to">
+                </div>
+                
+                <div class="form-group">
+                    <label for="count">Results</label>
+                    <select id="count" name="count">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button type="submit" class="btn">Search</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="claims-table">
+            <h2>📄 Recent Claims</h2>
+            <div id="claimsTableContent">
+                <div class="loading">Loading claims...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let charts = {};
+        let loadedMeasures = {};
+        
+        // Toggle menu section collapse
+        function toggleMenuSection(element) {
+            element.classList.toggle('collapsed');
+            element.nextElementSibling.classList.toggle('collapsed');
+        }
+        
+        // Switch active content area
+        function switchContent(contentId) {
+            // Hide all content areas
+            document.querySelectorAll('.content-area').forEach(area => {
+                area.classList.remove('active');
+            });
+            
+            // Show selected content area
+            document.getElementById(`content-${contentId}`).classList.add('active');
+            
+            // Update active menu item
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.menu-item').classList.add('active');
+        }
+        
+        // Load HEDIS measure
+        async function loadMeasure(measureCode) {
+            const contentId = `content-${measureCode}`;
+            const contentDiv = document.getElementById(contentId);
+            
+            // Update page header
+            const titles = {
+                'bcs': 'Breast Cancer Screening (BCS)',
+                'col': 'Colorectal Cancer Screening (COL)',
+                'cdc': 'Comprehensive Diabetes Care (CDC)',
+                'cbp': 'Controlling High Blood Pressure (CBP)'
+            };
+            
+            document.getElementById('pageTitle').textContent = `📊 ${titles[measureCode]}`;
+            document.getElementById('pageSubtitle').textContent = 'HEDIS Digital Quality Measure';
+            
+            // Switch to this content
+            switchContent(measureCode);
+            
+            // Load data if not already loaded
+            if (!loadedMeasures[measureCode]) {
+                contentDiv.innerHTML = '<div class="loading">Loading measure data</div>';
+                
+                try {
+                    const response = await fetch(`/api/hedis-${measureCode}`);
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        contentDiv.innerHTML = `<div class="error-message">Error: ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    // Render the measure data
+                    renderMeasure(contentDiv, measureCode, data);
+                    loadedMeasures[measureCode] = data;
+                    
+                } catch (error) {
+                    contentDiv.innerHTML = `<div class="error-message">Failed to load measure: ${error.message}</div>`;
+                }
+            }
+        }
+        
+        // Render measure data
+        function renderMeasure(container, measureCode, data) {
+            const rate = data.rate || 0;
+            const denominator = data.denominator || 0;
+            const numerator = data.numerator || 0;
+            
+            container.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Compliance Rate</h3>
+                        <div class="value" style="color: ${rate >= 70 ? '#27ae60' : rate >= 50 ? '#f39c12' : '#e74c3c'}">
+                            ${rate.toFixed(1)}%
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Denominator</h3>
+                        <div class="value">${denominator.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Numerator</h3>
+                        <div class="value">${numerator.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Gap in Care</h3>
+                        <div class="value">${(data.gap_in_care_count || 0).toLocaleString()}</div>
+                    </div>
+                </div>
+                
+                <div class="chart-card" style="margin-top: 30px;">
+                    <h2>Measure Details</h2>
+                    <p style="margin-bottom: 15px;"><strong>Measure Name:</strong> ${data.measure_name || 'N/A'}</p>
+                    <p style="margin-bottom: 15px;"><strong>Measurement Period:</strong> ${JSON.stringify(data.measurement_period || {})}</p>
+                    ${data.note ? `<p style="color: #7f8c8d;"><em>${data.note}</em></p>` : ''}
+                    
+                    ${numerator > 0 ? `
+                        <h3 style="margin-top: 30px;">Sample Compliant Patients (Top ${Math.min(10, (data.numerator_patients || []).length)})</h3>
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            ${(data.numerator_patients || []).map(p => `
+                                <div style="background: #f8f9fa; padding: 10px; margin: 5px 0; border-radius: 5px;">
+                                    <strong>${p.name || p.patient}</strong> - Age: ${p.age || 'N/A'}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        // Load dashboard
+        async function loadDashboard() {
+            document.getElementById('pageTitle').textContent = '📈 Claims Overview Dashboard';
+            document.getElementById('pageSubtitle').textContent = 'Interactive analytics and visualization';
+            switchContent('dashboard');
+            
+            // Implementation for dashboard
+            document.getElementById('content-dashboard').innerHTML = '<div class="loading">Dashboard loading not yet implemented</div>';
+        }
+        
+        // Load mammograms
+        async function loadMammograms() {
+            document.getElementById('pageTitle').textContent = '🔬 Mammogram Claims Analytics';
+            document.getElementById('pageSubtitle').textContent = 'Mammography procedure analysis';
+            switchContent('mammograms');
+            
+            // Implementation for mammograms
+            document.getElementById('content-mammograms').innerHTML = '<div class="loading">Mammogram analytics not yet implemented</div>';
+        }
+        
+        // Initialize dashboard (removed auto-load)
+        async function init() {
+            // Don't auto-load anything anymore
+            console.log('Dashboard initialized - select a view from the menu');
+        }
+        
+        // OLD FUNCTIONS BELOW - kept for reference but not used
+        
+        // Load mammogram statistics
+        async function loadMammogramStats() {
+            try {
+                const response = await fetch('/api/mammogram-stats');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('Failed to load mammogram stats:', data.error);
+                    return;
+                }
+                
+                // Show the mammogram section if we have data
+                if (data.total_mammogram_claims > 0) {
+                    document.getElementById('mammogramSection').style.display = 'block';
+                    
+                    // Update mammogram stat cards
+                    document.getElementById('mammoTotal').textContent = data.total_mammogram_claims.toLocaleString();
+                    document.getElementById('mammoPatients').textContent = data.unique_patients.toLocaleString();
+                    document.getElementById('mammoCost').textContent = '$' + data.total_cost.toLocaleString();
+                    document.getElementById('mammoAvgCost').textContent = '$' + data.average_cost.toFixed(2);
+                    
+                    // Render procedure breakdown
+                    const procedureList = document.getElementById('procedureList');
+                    procedureList.innerHTML = '';
+                    for (const [procedure, count] of Object.entries(data.by_procedure)) {
+                        const item = document.createElement('div');
+                        item.className = 'procedure-item';
+                        item.innerHTML = `
+                            <span>${procedure}</span>
+                            <strong>${count.toLocaleString()} claims</strong>
+                        `;
+                        procedureList.appendChild(item);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Failed to load mammogram statistics:', error);
+            }
+        }
+        
+        // Load all HEDIS measures
+        let hedisData = {bcs: null, col: null, cdc: null, cbp: null};
+        
+        async function loadHEDISMeasure() {
+            // Always show the HEDIS section
+            const hedisSection = document.getElementById('hedisSection');
+            if (hedisSection) {
+                hedisSection.style.display = 'block';
+            }
+            
+            try {
+                console.log('Loading HEDIS measures...');
+                
+                // Use 50 patients to avoid timeout
+                const maxPatients = 50;
+                
+                const [bcsData, colData, cdcData, cbpData] = await Promise.all([
+                    fetch(`/api/hedis-bcs?max_patients=${maxPatients}`).then(r => r.json()),
+                    fetch(`/api/hedis-col?max_patients=${maxPatients}`).then(r => r.json()),
+                    fetch(`/api/hedis-cdc?max_patients=${maxPatients}`).then(r => r.json()),
+                    fetch(`/api/hedis-cbp?max_patients=${maxPatients}`).then(r => r.json())
+                ]);
+                
+                console.log('HEDIS data loaded:', {bcsData, colData, cdcData, cbpData});
+                
+                hedisData = {bcs: bcsData, col: colData, cdc: cdcData, cbp: cbpData};
+                
+                // Display all measures
+                displayHEDISMeasure('bcs', bcsData);
+                displayHEDISMeasure('col', colData);
+                displayHEDISMeasure('cdc', cdcData);
+                displayHEDISMeasure('cbp', cbpData);
+                
+                // Load summary
+                await loadHEDISSummary();
+                
+            } catch (error) {
+                console.error('Failed to load HEDIS measures:', error);
+                // Show error in the first tab
+                const rateEl = document.getElementById('hedisRate-bcs');
+                if (rateEl) rateEl.textContent = 'Error';
+                const labelEl = document.getElementById('hedisLabel-bcs');
+                if (labelEl) labelEl.textContent = error.message;
+            }
+        }
+        
+        function displayHEDISMeasure(measureId, data) {
+            console.log(`Displaying HEDIS measure ${measureId}:`, data);
+            
+            if (!data) {
+                console.log(`No data for ${measureId}`);
+                return;
+            }
+            
+            if (data.error) {
+                console.error(`Error in ${measureId}:`, data.error);
+                // Show the error in the UI
+                const rateEl = document.getElementById(`hedisRate-${measureId}`);
+                const labelEl = document.getElementById(`hedisLabel-${measureId}`);
+                if (rateEl) rateEl.textContent = 'Error';
+                if (labelEl) labelEl.textContent = data.error;
+                return;
+            }
+            
+            // Show data even if denominator is 0
+            const denominator = data.denominator || 0;
+            const numerator = data.numerator || 0;
+            const rate = data.rate || 0;
+            
+            // Update compliance rate
+            const rateEl = document.getElementById(`hedisRate-${measureId}`);
+            const labelEl = document.getElementById(`hedisLabel-${measureId}`);
+            if (rateEl) rateEl.textContent = data.rate_display || `${rate.toFixed(2)}%`;
+            if (labelEl) labelEl.textContent = `${numerator} of ${denominator} eligible patients`;
+            
+            // Update stat cards
+            const denomEl = document.getElementById(`hedisDenominator-${measureId}`);
+            const numerEl = document.getElementById(`hedisNumerator-${measureId}`);
+            const gapEl = document.getElementById(`hedisGap-${measureId}`);
+            if (denomEl) denomEl.textContent = denominator.toLocaleString();
+            if (numerEl) numerEl.textContent = numerator.toLocaleString();
+            if (gapEl) gapEl.textContent = (data.gap_in_care_count || 0).toLocaleString();
+            
+            // For BCS, also update exclusions
+            if (measureId === 'bcs') {
+                const exclEl = document.getElementById(`hedisExclusions-${measureId}`);
+                if (exclEl) exclEl.textContent = (data.exclusions || 0).toLocaleString();
+            } else {
+                // For other measures, update star rating
+                const starsEl = document.getElementById(`hedisStars-${measureId}`);
+                if (starsEl) starsEl.textContent = getStarEmoji(data.rate || 0);
+            }
+            
+            // Render compliance chart
+            renderHEDISComplianceChartForMeasure(measureId, data);
+            
+            // Render gap in care list
+            if (data.gap_in_care && data.gap_in_care.length > 0) {
+                const gapSection = document.getElementById(`gapInCareSection-${measureId}`);
+                if (gapSection) {
+                    gapSection.style.display = 'block';
+                    const gapList = document.getElementById(`gapList-${measureId}`);
+                    if (gapList) {
+                        gapList.innerHTML = '';
+                        data.gap_in_care.forEach(patient => {
+                            const item = document.createElement('div');
+                            item.className = 'gap-item';
+                            item.innerHTML = `
+                                <div>
+                                    <div class="patient-name">${patient.name}</div>
+                                    <div class="patient-age">${patient.patient}</div>
+                                </div>
+                                <div class="patient-age">Age: ${patient.age}</div>
+                            `;
+                            gapList.appendChild(item);
+                        });
+                    }
+                }
+            }
+        }
+        
+        async function loadHEDISSummary() {
+            try {
+                const response = await fetch('/api/hedis-summary?max_patients=200');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('Failed to load HEDIS summary:', data.error);
+                    return;
+                }
+                
+                // Update summary card
+                const summaryRate = data.summary.average_rate || 0;
+                const summaryEl = document.getElementById('hedisSummaryRate');
+                const summaryStarsEl = document.getElementById('hedisSummaryStars');
+                if (summaryEl) summaryEl.textContent = summaryRate.toFixed(2) + '%';
+                if (summaryStarsEl) summaryStarsEl.innerHTML = getHEDISStarRating(summaryRate);
+                
+                // Update individual measure cards in summary
+                updateSummaryCard('Bcs', data.measures.breast_cancer_screening);
+                updateSummaryCard('Col', data.measures.colorectal_cancer_screening);
+                updateSummaryCard('Cdc', data.measures.diabetes_care);
+                updateSummaryCard('Cbp', data.measures.blood_pressure_control);
+                
+            } catch (error) {
+                console.error('Failed to load HEDIS summary:', error);
+            }
+        }
+        
+        function updateSummaryCard(measureKey, data) {
+            if (!data || data.error) return;
+            
+            const rateEl = document.getElementById(`summary${measureKey}Rate`);
+            const detailsEl = document.getElementById(`summary${measureKey}Details`);
+            
+            if (rateEl) rateEl.textContent = (data.rate || 0).toFixed(2) + '%';
+            if (detailsEl) {
+                detailsEl.innerHTML = `
+                    <strong>${data.numerator || 0}</strong> of <strong>${data.denominator || 0}</strong> compliant<br>
+                    <span style="color: #999; font-size: 0.9em;">${getStarEmoji(data.rate || 0)} ${getStarLabel(data.rate || 0)}</span>
+                `;
+            }
+        }
+        
+        function getStarEmoji(rate) {
+            if (rate >= 90) return '⭐⭐⭐⭐⭐';
+            if (rate >= 80) return '⭐⭐⭐⭐';
+            if (rate >= 70) return '⭐⭐⭐';
+            if (rate >= 60) return '⭐⭐';
+            return '⭐';
+        }
+        
+        function getStarLabel(rate) {
+            if (rate >= 90) return 'Excellent';
+            if (rate >= 80) return 'Very Good';
+            if (rate >= 70) return 'Good';
+            if (rate >= 60) return 'Fair';
+            return 'Needs Improvement';
+        }
+        
+        function switchHEDISMeasure(measureId) {
+            // Update tab styles
+            document.querySelectorAll('.hedis-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update content visibility
+            document.querySelectorAll('.hedis-measure-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            const measureContent = document.getElementById(`measure-${measureId}`);
+            if (measureContent) {
+                measureContent.classList.add('active');
+            }
+        }
+        
+        // Load statistics and render charts
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('Failed to load statistics: ' + data.error);
+                    return;
+                }
+                
+                // Update stat cards
+                document.getElementById('totalClaims').textContent = data.total_claims.toLocaleString();
+                document.getElementById('totalCost').textContent = '$' + data.total_cost.toLocaleString();
+                document.getElementById('activeClaims').textContent = (data.by_status.active || 0).toLocaleString();
+                document.getElementById('uniquePatients').textContent = (data.unique_patient_count || 0).toLocaleString();
+                
+                // Render charts
+                renderClaimsByMonthChart(data.by_month);
+                renderCostTrendChart(data.cost_by_month);
+                renderProceduresChart(data.top_procedures);
+                renderStatusChart(data.by_status);
+                
+            } catch (error) {
+                showError('Failed to load statistics: ' + error.message);
+            }
+        }
+        
+        // Load claims table
+        async function loadClaims(params = {}) {
+            const tableContent = document.getElementById('claimsTableContent');
+            tableContent.innerHTML = '<div class="loading">Loading claims...</div>';
+            
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch('/api/claims?' + queryString);
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('Failed to load claims: ' + data.error);
+                    return;
+                }
+                
+                renderClaimsTable(data.claims);
+                
+            } catch (error) {
+                showError('Failed to load claims: ' + error.message);
+            }
+        }
+        
+        // Render claims table
+        function renderClaimsTable(claims) {
+            const tableContent = document.getElementById('claimsTableContent');
+            
+            if (claims.length === 0) {
+                tableContent.innerHTML = '<p>No claims found.</p>';
+                return;
+            }
+            
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Patient</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Procedure</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${claims.map(claim => {
+                            const patientName = claim.patient?.display || 'Unknown';
+                            const status = claim.status || 'unknown';
+                            const created = claim.created ? new Date(claim.created).toLocaleDateString() : '-';
+                            const procedure = claim.item?.[0]?.productOrService?.coding?.[0]?.display || '-';
+                            const amount = claim.total?.value ? '$' + claim.total.value.toFixed(2) : '-';
+                            
+                            return `
+                                <tr>
+                                    <td>${claim.id}</td>
+                                    <td>${patientName}</td>
+                                    <td><span class="status-badge status-${status}">${status}</span></td>
+                                    <td>${created}</td>
+                                    <td>${procedure}</td>
+                                    <td>${amount}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            tableContent.innerHTML = html;
+        }
+        
+        // HEDIS Helper Functions
+        function getHEDISStarRating(rate) {
+            // HEDIS Star Ratings based on compliance rate
+            // 5 stars: >= 90%, 4 stars: >= 80%, 3 stars: >= 70%, 2 stars: >= 60%, 1 star: < 60%
+            let stars = '';
+            let rating = '';
+            
+            if (rate >= 90) {
+                stars = '⭐⭐⭐⭐⭐';
+                rating = '5 Stars - Excellent';
+            } else if (rate >= 80) {
+                stars = '⭐⭐⭐⭐';
+                rating = '4 Stars - Very Good';
+            } else if (rate >= 70) {
+                stars = '⭐⭐⭐';
+                rating = '3 Stars - Good';
+            } else if (rate >= 60) {
+                stars = '⭐⭐';
+                rating = '2 Stars - Needs Improvement';
+            } else {
+                stars = '⭐';
+                rating = '1 Star - Critical';
+            }
+            
+            return `${stars} <span style="color: #666;">(${rating})</span>`;
+        }
+        
+        function renderHEDISComplianceChartForMeasure(measureId, data) {
+            const canvasId = `hedisComplianceChart-${measureId}`;
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const chartKey = `hedisCompliance_${measureId}`;
+            
+            if (charts[chartKey]) charts[chartKey].destroy();
+            
+            // For BCS, include exclusions; for others, just compliant vs gap
+            const labels = measureId === 'bcs' 
+                ? ['Compliant', 'Gap in Care', 'Exclusions']
+                : ['Compliant', 'Gap in Care'];
+            
+            const values = measureId === 'bcs'
+                ? [data.numerator || 0, data.gap_in_care_count || 0, data.exclusions || 0]
+                : [data.numerator || 0, data.gap_in_care_count || 0];
+            
+            const backgroundColors = measureId === 'bcs'
+                ? [
+                    'rgba(40, 167, 69, 0.8)',   // Green for compliant
+                    'rgba(255, 193, 7, 0.8)',    // Yellow for gap
+                    'rgba(108, 117, 125, 0.8)'   // Gray for exclusions
+                  ]
+                : [
+                    'rgba(40, 167, 69, 0.8)',   // Green for compliant
+                    'rgba(255, 193, 7, 0.8)'     // Yellow for gap
+                  ];
+            
+            const borderColors = measureId === 'bcs'
+                ? [
+                    'rgba(40, 167, 69, 1)',
+                    'rgba(255, 193, 7, 1)',
+                    'rgba(108, 117, 125, 1)'
+                  ]
+                : [
+                    'rgba(40, 167, 69, 1)',
+                    'rgba(255, 193, 7, 1)'
+                  ];
+            
+            charts[chartKey] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = data.denominator + (data.exclusions || 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderHEDISComplianceChart(data) {
+            renderHEDISComplianceChartForMeasure('bcs', data);
+        }
+        
+        // Chart rendering functions
+        function renderClaimsByMonthChart(data) {
+            const ctx = document.getElementById('claimsByMonthChart');
+            if (charts.claimsByMonth) charts.claimsByMonth.destroy();
+            
+            charts.claimsByMonth = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: 'Claims',
+                        data: Object.values(data),
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderCostTrendChart(data) {
+            const ctx = document.getElementById('costTrendChart');
+            if (charts.costTrend) charts.costTrend.destroy();
+            
+            charts.costTrend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: 'Total Cost ($)',
+                        data: Object.values(data),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderProceduresChart(data) {
+            const ctx = document.getElementById('proceduresChart');
+            if (charts.procedures) charts.procedures.destroy();
+            
+            charts.procedures = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: 'Count',
+                        data: Object.values(data),
+                        backgroundColor: '#f59e0b'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderStatusChart(data) {
+            const ctx = document.getElementById('statusChart');
+            if (charts.status) charts.status.destroy();
+            
+            charts.status = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        data: Object.values(data),
+                        backgroundColor: [
+                            '#667eea',
+                            '#764ba2',
+                            '#f59e0b',
+                            '#10b981',
+                            '#ef4444'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        
+        // Search form handler
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const params = {};
+            
+            for (let [key, value] of formData.entries()) {
+                if (value) params[key] = value;
+            }
+            
+            await loadClaims(params);
+        });
+        
+        // Error display
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.querySelector('.container').insertBefore(errorDiv, document.querySelector('.stats-grid'));
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+        
+        // ========== Chat Agent Functions ==========
+        
+        // Load chat suggestions
+        async function loadChatSuggestions() {
+            try {
+                const response = await fetch('/api/chat/suggestions');
+                const data = await response.json();
+                
+                const suggestionsDiv = document.getElementById('chatSuggestions');
+                suggestionsDiv.innerHTML = '';
+                
+                data.suggestions.forEach(suggestion => {
+                    const btn = document.createElement('button');
+                    btn.className = 'suggestion-btn';
+                    btn.textContent = suggestion;
+                    btn.onclick = () => {
+                        document.getElementById('chatInput').value = suggestion;
+                        sendChatMessage();
+                    };
+                    suggestionsDiv.appendChild(btn);
+                });
+                
+                // Show chat section
+                document.getElementById('chatSection').style.display = 'block';
+            } catch (error) {
+                console.error('Failed to load chat suggestions:', error);
+            }
+        }
+        
+        // Send chat message
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            const messagesDiv = document.getElementById('chatMessages');
+            const sendBtn = document.getElementById('chatSendBtn');
+            
+            // Add user message
+            addChatMessage('user', message);
+            input.value = '';
+            sendBtn.disabled = true;
+            
+            // Add loading indicator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'chat-message assistant';
+            loadingDiv.id = 'chat-loading';
+            loadingDiv.innerHTML = `
+                <div class="message-bubble">
+                    <div class="chat-loading">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            `;
+            messagesDiv.appendChild(loadingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                
+                // Remove loading indicator
+                loadingDiv.remove();
+                
+                if (data.error) {
+                    addChatMessage('assistant', 'Sorry, I encountered an error: ' + data.error);
+                } else {
+                    addChatMessage('assistant', data.response, data.data, data.type);
+                }
+                
+            } catch (error) {
+                loadingDiv.remove();
+                addChatMessage('assistant', 'Sorry, I encountered an error processing your request.');
+            }
+            
+            sendBtn.disabled = false;
+            input.focus();
+        }
+        
+        // Add message to chat
+        function addChatMessage(role, text, data = null, type = null) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${role}`;
+            
+            let html = `<div class="message-bubble">${text}</div>`;
+            
+            // Add data visualization if available
+            if (data && type) {
+                const chartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                
+                if (type === 'mammogram_stats' && data.by_month) {
+                    // Render mammogram statistics with charts
+                    html += `<div class="message-data">
+                        <h4>📊 Mammogram Statistics</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
+                            <div>
+                                <h5 style="margin-bottom: 10px;">Claims by Month</h5>
+                                <canvas id="${chartId}-month" width="400" height="300"></canvas>
+                            </div>
+                            <div>
+                                <h5 style="margin-bottom: 10px;">Claims by Procedure</h5>
+                                <canvas id="${chartId}-procedure" width="400" height="300"></canvas>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
+                            <strong>Total Claims:</strong> ${data.count.toLocaleString()}<br>
+                            <strong>Total Cost:</strong> $${data.total_cost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>
+                            <strong>Average Cost:</strong> $${data.average_cost.toFixed(2)}
+                        </div>
+                    </div>`;
+                    
+                    messageDiv.innerHTML = html;
+                    messagesDiv.appendChild(messageDiv);
+                    
+                    // Render charts after DOM insertion
+                    setTimeout(() => {
+                        // Monthly trend chart
+                        const monthCtx = document.getElementById(`${chartId}-month`);
+                        if (monthCtx) {
+                            new Chart(monthCtx, {
+                                type: 'line',
+                                data: {
+                                    labels: Object.keys(data.by_month),
+                                    datasets: [{
+                                        label: 'Claims',
+                                        data: Object.values(data.by_month),
+                                        borderColor: '#9b59b6',
+                                        backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                                        tension: 0.4,
+                                        fill: true
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: { display: false }
+                                    },
+                                    scales: {
+                                        y: { beginAtZero: true }
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // Procedure breakdown chart
+                        const procCtx = document.getElementById(`${chartId}-procedure`);
+                        if (procCtx) {
+                            const procedures = Object.keys(data.by_procedure);
+                            const counts = Object.values(data.by_procedure);
+                            new Chart(procCtx, {
+                                type: 'doughnut',
+                                data: {
+                                    labels: procedures,
+                                    datasets: [{
+                                        data: counts,
+                                        backgroundColor: [
+                                            '#9b59b6',
+                                            '#3498db',
+                                            '#e74c3c',
+                                            '#f39c12',
+                                            '#2ecc71'
+                                        ]
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: {
+                                            position: 'bottom',
+                                            labels: {
+                                                boxWidth: 12,
+                                                font: { size: 10 }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }, 100);
+                    
+                } else if (type === 'hedis_measure' && data.measure) {
+                    // Render HEDIS measure with gap in care visualization
+                    const measure = data.measure;
+                    html += `<div class="message-data">
+                        <h4>📊 HEDIS Breast Cancer Screening - Gap in Care Analysis</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
+                            <div>
+                                <h5 style="margin-bottom: 10px;">Compliance vs Gap in Care</h5>
+                                <canvas id="${chartId}-compliance" width="400" height="300"></canvas>
+                            </div>
+                            <div>
+                                <h5 style="margin-bottom: 10px;">Gap in Care Patients</h5>
+                                <div style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border-radius: 5px;">
+                                    ${measure.gap_in_care && measure.gap_in_care.length > 0 ? 
+                                        measure.gap_in_care.slice(0, 10).map(p => 
+                                            `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
+                                                <strong>${p.name}</strong>, Age ${p.age}<br>
+                                                <small style="color: #666;">${p.patient}</small>
+                                            </div>`
+                                        ).join('') : 
+                                        '<div style="padding: 10px; color: #2ecc71;"><strong>✓ No gaps in care!</strong></div>'
+                                    }
+                                    ${measure.gap_in_care && measure.gap_in_care.length > 10 ? 
+                                        `<div style="padding: 10px; color: #666; text-align: center;">
+                                            ... and ${measure.gap_in_care_count - 10} more patients
+                                        </div>` : ''
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                                <div>
+                                    <div style="font-size: 2em; font-weight: bold; color: #2ecc71;">${measure.rate_display}</div>
+                                    <div style="color: #666; font-size: 0.9em;">Compliance Rate</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 2em; font-weight: bold; color: #3498db;">${measure.numerator}</div>
+                                    <div style="color: #666; font-size: 0.9em;">Screened</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 2em; font-weight: bold; color: #e74c3c;">${measure.gap_in_care_count}</div>
+                                    <div style="color: #666; font-size: 0.9em;">Need Screening</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 2em; font-weight: bold; color: #95a5a6;">${measure.denominator}</div>
+                                    <div style="color: #666; font-size: 0.9em;">Eligible Total</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 0.85em; color: #666;">
+                                <strong>Measurement Period:</strong> ${measure.measurement_period.start} to ${measure.measurement_period.end} (27 months)
+                            </div>
+                        </div>
+                    </div>`;
+                    
+                    messageDiv.innerHTML = html;
+                    messagesDiv.appendChild(messageDiv);
+                    
+                    // Render compliance chart after DOM insertion
+                    setTimeout(() => {
+                        const compCtx = document.getElementById(`${chartId}-compliance`);
+                        if (compCtx) {
+                            new Chart(compCtx, {
+                                type: 'doughnut',
+                                data: {
+                                    labels: ['Screened (Compliant)', 'Need Screening (Gap)'],
+                                    datasets: [{
+                                        data: [measure.numerator, measure.gap_in_care_count],
+                                        backgroundColor: ['#2ecc71', '#e74c3c'],
+                                        borderWidth: 2,
+                                        borderColor: '#fff'
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: {
+                                            position: 'bottom',
+                                            labels: {
+                                                boxWidth: 15,
+                                                font: { size: 12, weight: 'bold' },
+                                                padding: 15
+                                            }
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(context) {
+                                                    const label = context.label || '';
+                                                    const value = context.parsed || 0;
+                                                    const total = measure.denominator;
+                                                    const percentage = ((value / total) * 100).toFixed(1);
+                                                    return `${label}: ${value} patients (${percentage}%)`;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }, 100);
+                    
+                } else if (type === 'statistics' || type === 'trends' || type === 'top_procedures') {
+                    html += `<div class="message-data">
+                        <h4>📊 Data</h4>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>`;
+                    messageDiv.innerHTML = html;
+                    messagesDiv.appendChild(messageDiv);
+                    
+                } else if (type === 'aggregation') {
+                    html += `<div class="message-data">
+                        <h4>📈 ${data.aggregation}</h4>
+                        <pre>${JSON.stringify(data.data, null, 2)}</pre>
+                    </div>`;
+                    messageDiv.innerHTML = html;
+                    messagesDiv.appendChild(messageDiv);
+                    
+                } else if (type === 'search_results') {
+                    html += `<div class="message-data">
+                        <h4>🔍 Found ${data.count} results</h4>
+                    </div>`;
+                    messageDiv.innerHTML = html;
+                    messagesDiv.appendChild(messageDiv);
+                } else {
+                    messageDiv.innerHTML = html;
+                    messagesDiv.appendChild(messageDiv);
+                }
+            } else {
+                messageDiv.innerHTML = html;
+                messagesDiv.appendChild(messageDiv);
+            }
+            
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // Export chat data to CSV
+        async function exportChatData(dataType) {
+            try {
+                const response = await fetch('/api/chat/export-csv', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ data_type: dataType })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Export failed');
+                }
+                
+                // Download the file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${dataType}_export_${new Date().getTime()}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                addChatMessage('assistant', `✅ Successfully exported ${dataType} data to CSV!`);
+            } catch (error) {
+                addChatMessage('assistant', `❌ Failed to export data: ${error.message}`);
+            }
+        }
+        
+        // Initialize on page load
+        init();
+    </script>
+</body>
+</html>
