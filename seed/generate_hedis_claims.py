@@ -58,6 +58,84 @@ FIRST_NAMES = ['James', 'Mary', 'John', 'Patricia', 'Robert', 'Jennifer', 'Micha
                'William', 'Elizabeth', 'David', 'Barbara', 'Richard', 'Susan', 'Joseph', 'Jessica']
 LAST_NAMES = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis']
 
+INSURANCE_PLANS = ['Blue Cross PPO', 'Aetna HMO', 'Cigna PPO', 'UnitedHealthcare', 
+                   'Medicare', 'Medicaid', 'Humana']
+
+
+def create_practitioner(practitioner_id, first_name, last_name):
+    """Create a practitioner resource using PUT."""
+    practitioner = {
+        "resourceType": "Practitioner",
+        "id": practitioner_id,
+        "active": True,
+        "name": [{
+            "family": last_name,
+            "given": [first_name],
+            "text": f"Dr. {first_name} {last_name}"
+        }],
+        "qualification": [{
+            "code": {
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/v2-0360/2.7",
+                    "code": "MD",
+                    "display": "Doctor of Medicine"
+                }]
+            }
+        }]
+    }
+    
+    url = f"{FHIR_BASE_URL}/Practitioner/{practitioner_id}"
+    response = SESSION.put(url, json=practitioner)
+    if response.status_code in [200, 201]:
+        return practitioner_id
+    else:
+        print(f"Failed to create practitioner {practitioner_id}: {response.status_code}")
+        return None
+
+
+def create_coverage(coverage_id, patient_id):
+    """Create a coverage (insurance) resource for a patient using PUT."""
+    plan_name = random.choice(INSURANCE_PLANS)
+    
+    coverage = {
+        "resourceType": "Coverage",
+        "id": coverage_id,
+        "status": "active",
+        "type": {
+            "coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                "code": "HIP",
+                "display": "health insurance plan policy"
+            }]
+        },
+        "subscriber": {
+            "reference": f"Patient/{patient_id}"
+        },
+        "beneficiary": {
+            "reference": f"Patient/{patient_id}"
+        },
+        "payor": [{
+            "display": plan_name
+        }],
+        "class": [{
+            "type": {
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/coverage-class",
+                    "code": "plan"
+                }]
+            },
+            "value": plan_name
+        }]
+    }
+    
+    url = f"{FHIR_BASE_URL}/Coverage/{coverage_id}"
+    response = SESSION.put(url, json=coverage)
+    if response.status_code in [200, 201]:
+        return coverage_id
+    else:
+        print(f"Failed to create coverage {coverage_id}: {response.status_code}")
+        return None
+
 
 def create_patient(patient_id, gender, age_min, age_max):
     """Create a patient with specified gender and age range using PUT."""
@@ -204,6 +282,9 @@ def generate_col_claims(num_patients=1000):
         if not create_patient(patient_id, gender, 45, 75):
             continue
         
+        # Create coverage for patient
+        create_coverage(f"{patient_id}-coverage", patient_id)
+        
         # 70% get colonoscopy (10 year lookback - compliant)
         if random.random() < 0.7:
             days_ago = random.randint(30, 3650)  # Within 10 years
@@ -240,6 +321,9 @@ def generate_cdc_claims(num_patients=1000):
         if not create_patient(patient_id, gender, 18, 75):
             continue
         
+        # Create coverage for patient
+        create_coverage(f"{patient_id}-coverage", patient_id)
+        
         # Add diabetes diagnosis
         diabetes_code, diabetes_display = random.choice(DIABETES_CODES)
         create_condition(f"cdc-cond-{i+1:06d}", patient_id, diabetes_code, diabetes_display)
@@ -274,6 +358,9 @@ def generate_cbp_claims(num_patients=1000):
         if not create_patient(patient_id, gender, 18, 85):
             continue
         
+        # Create coverage for patient
+        create_coverage(f"{patient_id}-coverage", patient_id)
+        
         # Add hypertension diagnosis
         htn_code, htn_display = random.choice(HYPERTENSION_CODES)
         create_condition(f"cbp-cond-{i+1:06d}", patient_id, htn_code, htn_display)
@@ -304,6 +391,13 @@ def main():
     print("\nThis will generate 3000 patients and associated claims.")
     print("Estimated time: 15-20 minutes")
     print("=" * 60)
+    
+    # Create practitioner first
+    print("\n=== Creating Practitioner ===")
+    if create_practitioner("prov-1", "Sarah", "Johnson"):
+        print("✓ Created Dr. Sarah Johnson (Practitioner/prov-1)")
+    else:
+        print("✗ Failed to create practitioner - continuing anyway")
     
     # Generate claims for each measure
     generate_col_claims(1000)

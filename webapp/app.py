@@ -481,12 +481,22 @@ def chat():
         # Process the query
         result = chat_agent.process_user_query(user_message)
         
-        return jsonify({
+        response = {
             'response': result['message'],
             'type': result['type'],
             'data': result.get('data', {}),
             'timestamp': datetime.now().isoformat()
-        })
+        }
+        
+        # Include chart_data if present (for visualization)
+        if 'chart_data' in result:
+            response['chart_data'] = result['chart_data']
+        
+        # Include sources if present (for RAG attribution)
+        if 'sources' in result:
+            response['sources'] = result['sources']
+        
+        return jsonify(response)
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -545,5 +555,38 @@ def get_chat_suggestions():
     return jsonify({'suggestions': suggestions})
 
 
+@app.route('/api/chat/reindex', methods=['POST'])
+def reindex_knowledge_base():
+    """Re-index the knowledge base. Call this when new data is added."""
+    try:
+        result = chat_agent.reindex_all(clear_existing=True)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/chat/index-status')
+def get_index_status():
+    """Get current indexing status."""
+    try:
+        count = chat_agent.collection.count()
+        return jsonify({
+            'indexed': chat_agent.indexed,
+            'document_count': count,
+            'rag_enabled': chat_agent.use_rag
+        })
+    except Exception as e:
+        return jsonify({
+            'indexed': False,
+            'document_count': 0,
+            'rag_enabled': False,
+            'error': str(e)
+        })
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+

@@ -115,7 +115,7 @@
         }
         
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #00A8E0;
             color: white;
             padding: 30px;
             border-radius: 10px;
@@ -209,6 +209,106 @@
             border-radius: 10px;
             margin-bottom: 20px;
         }
+        
+        /* Chat Styles */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 180px);
+            max-width: 100%;
+            padding: 0 20px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            max-height: calc(100vh - 300px);
+        }
+        
+        .chat-message {
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            max-width: 75%;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        
+        .chat-message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .chat-message.assistant {
+            background: #f5f7fa;
+            color: #2c3e50;
+        }
+        
+        .chat-message.error {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .chat-input-area {
+            display: flex;
+            gap: 10px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .chat-input-area input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }
+        
+        .chat-input-area button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+        
+        .chat-input-area button:hover {
+            background: #5568d3;
+        }
+        
+        .chat-suggestions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            padding: 0 12px;
+        }
+        
+        .suggestion-chip {
+            padding: 6px 12px;
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        
+        .suggestion-chip:hover {
+            background: #667eea;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -253,6 +353,19 @@
                 </div>
             </div>
         </div>
+        
+        <div class="menu-section">
+            <div class="menu-section-title" onclick="toggleMenuSection(this)">
+                <span>AI Assistant</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="menu-items">
+                <div class="menu-item" onclick="loadChat(this)">
+                    <span class="menu-item-icon">🤖</span>
+                    <span>Chat Agent</span>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Main Content Area -->
@@ -286,11 +399,31 @@
         
         <!-- Dashboard Content -->
         <div id="content-dashboard" class="content-area"></div>
+        
+        <!-- Chat Content -->
+        <div id="content-chat" class="content-area">
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="Ask about claims, patients, or HEDIS measures..." />
+                    <button id="sendButton" onclick="console.log('Send button clicked!'); sendMessage();">Send</button>
+                </div>
+                <div class="chat-suggestions" id="chatSuggestions"></div>
+            </div>
+        </div>
     </div>
 
     <script>
+        // Global error handler for debugging
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('JavaScript Error:', msg, 'at line', lineNo);
+            return false;
+        };
+        
         let charts = {};
         let loadedMeasures = {};
+        
+        console.log('Script loaded, defining functions...');
         
         // Toggle menu section collapse
         function toggleMenuSection(element) {
@@ -577,6 +710,221 @@
             }
             return stars;
         }
+        
+        // Chat functions
+        async function loadChat(clickedElement) {
+            document.getElementById('pageTitle').textContent = '🤖 AI Chat Assistant';
+            document.getElementById('pageSubtitle').textContent = 'Ask questions about claims, patients, and HEDIS measures';
+            switchContent('chat', clickedElement);
+            
+            // Load suggestions if not already loaded
+            if (!document.getElementById('chatSuggestions').innerHTML) {
+                loadChatSuggestions();
+            }
+        }
+        
+        async function loadChatSuggestions() {
+            try {
+                const response = await fetch('/api/chat/suggestions');
+                const data = await response.json();
+                const suggestions = data.suggestions || data; // Handle both formats
+                
+                if (!Array.isArray(suggestions)) {
+                    console.error('Suggestions is not an array:', suggestions);
+                    return;
+                }
+                
+                const suggestionsDiv = document.getElementById('chatSuggestions');
+                suggestionsDiv.innerHTML = suggestions.map(s => 
+                    `<div class="suggestion-chip" onclick="sendSuggestion('${s}')">${s}</div>`
+                ).join('');
+            } catch (error) {
+                console.error('Failed to load suggestions:', error);
+            }
+        }
+        
+        function sendSuggestion(text) {
+            document.getElementById('chatInput').value = text;
+            sendMessage();
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            console.log('sendMessage called with:', message); // Debug
+            
+            if (!message) {
+                console.log('Empty message, returning');
+                return;
+            }
+            
+            // Add user message to chat
+            addChatMessage(message, 'user');
+            input.value = '';
+            
+            console.log('Sending to /api/chat...'); // Debug
+            
+            // Send to backend
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                console.log('Response status:', response.status); // Debug
+                
+                const data = await response.json();
+                
+                console.log('Chat response:', data); // Debug logging
+                
+                // Add assistant response
+                if (data.error) {
+                    addChatMessage('Error: ' + data.error, 'error');
+                } else {
+                    addChatMessage(data.response, 'assistant');
+                    
+                    // Debug: Check what we have
+                    console.log('data.chart_data:', data.chart_data);
+                    console.log('data.chart_data exists?', !!data.chart_data);
+                    
+                    // If there's chart data, render it
+                    if (data.chart_data) {
+                        console.log('Rendering chart:', data.chart_data); // Debug logging
+                        console.log('Chart.js available?', typeof Chart !== 'undefined'); // Check Chart.js
+                        // Use setTimeout to ensure DOM is ready
+                        setTimeout(() => renderChatChart(data.chart_data), 100);
+                    } else {
+                        console.log('No chart_data in response');
+                    }
+                }
+            } catch (error) {
+                addChatMessage('Error: Failed to send message', 'error');
+            }
+        }
+        
+        function renderChatChart(chartData) {
+            console.log('renderChatChart called with:', chartData);
+            
+            if (!chartData || !chartData.type || !chartData.labels || !chartData.values) {
+                console.error('Invalid chart data:', chartData);
+                return;
+            }
+            
+            const messagesDiv = document.getElementById('chatMessages');
+            
+            // Create canvas for chart
+            const chartContainer = document.createElement('div');
+            chartContainer.className = 'chat-message assistant';
+            chartContainer.style.maxWidth = '400px';
+            chartContainer.style.margin = '10px 0';
+            const chartId = 'chatChart' + Date.now();
+            chartContainer.innerHTML = '<canvas id="' + chartId + '" width="350" height="250"></canvas>';
+            messagesDiv.appendChild(chartContainer);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            const canvas = document.getElementById(chartId);
+            if (!canvas) {
+                console.error('Canvas not found:', chartId);
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            
+            try {
+                // Create chart based on type
+                if (chartData.type === 'doughnut') {
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: chartData.labels,
+                            datasets: [{
+                                data: chartData.values,
+                                backgroundColor: chartData.colors
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                },
+                                title: {
+                                    display: true,
+                                    text: chartData.measure_name || 'HEDIS Measure Distribution'
+                                }
+                            }
+                        }
+                    });
+                    console.log('Doughnut chart created successfully');
+                } else if (chartData.type === 'bar') {
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: chartData.labels,
+                            datasets: [{
+                                label: 'Compliance Rate (%)',
+                                data: chartData.values,
+                                backgroundColor: chartData.colors
+                            }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'HEDIS Measures Comparison'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: {
+                                    display: true,
+                                    text: 'Compliance Rate (%)'
+                                }
+                            }
+                        }
+                    }
+                });
+                console.log('Bar chart created successfully');
+            }
+            } catch (error) {
+                console.error('Error creating chart:', error);
+                addChatMessage('❌ Failed to render chart: ' + error.message, 'error');
+            }
+            
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function addChatMessage(text, type) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${type}`;
+            messageDiv.style.whiteSpace = 'pre-wrap'; // Preserve line breaks
+            messageDiv.textContent = text;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // Allow Enter key to send message
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendMessage();
+                    }
+                });
+            }
+        });
         
         // Initialize dashboard
         window.addEventListener('DOMContentLoaded', function() {

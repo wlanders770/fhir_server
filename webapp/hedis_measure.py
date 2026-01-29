@@ -172,31 +172,44 @@ class HEDISBreastCancerScreening:
         Evaluate measure for a sample of patients.
         Returns measure results with numerator, denominator, and rate.
         """
-        # Query female patients (since we need women 50-74)
-        params = {
-            'gender': 'female',
-            '_count': str(max_patients)
-        }
+        # Query BCS patients directly by ID prefix (more reliable than gender filter)
+        # First try to get patients by known IDs
+        bcs_patient_ids = [f"bcs-patient-{i:06d}" for i in range(1, min(max_patients + 1, 1001))]
         
-        bundle = self.query_fhir('Patient', params)
+        # Fetch in batches of 100
+        patients = []
+        batch_size = 100
+        for i in range(0, len(bcs_patient_ids), batch_size):
+            batch_ids = bcs_patient_ids[i:i+batch_size]
+            id_param = ','.join(batch_ids)
+            params = {'_id': id_param, '_count': str(batch_size)}
+            bundle = self.query_fhir('Patient', params)
+            
+            if 'error' not in bundle and 'entry' in bundle:
+                patients.extend([entry.get('resource', {}) for entry in bundle.get('entry', [])])
         
-        if 'error' in bundle:
-            return {'error': bundle['error']}
-        
-        if 'entry' not in bundle:
-            return {
-                'numerator': 0,
-                'denominator': 0,
-                'exclusions': 0,
-                'rate': 0.0,
-                'measurement_period': {
-                    'start': self.measurement_start.isoformat(),
-                    'end': self.measurement_end.isoformat()
-                },
-                'note': 'No patients found'
-            }
-        
-        patients = [entry.get('resource', {}) for entry in bundle.get('entry', [])]
+        # If no BCS patients found, fall back to gender query
+        if not patients:
+            params = {'gender': 'female', '_count': str(max_patients)}
+            bundle = self.query_fhir('Patient', params)
+            
+            if 'error' in bundle:
+                return {'error': bundle['error']}
+            
+            if 'entry' not in bundle or not bundle.get('entry'):
+                return {
+                    'numerator': 0,
+                    'denominator': 0,
+                    'exclusions': 0,
+                    'rate': 0.0,
+                    'measurement_period': {
+                        'start': self.measurement_start.isoformat(),
+                        'end': self.measurement_end.isoformat()
+                    },
+                    'note': 'No patients found'
+                }
+            
+            patients = [entry.get('resource', {}) for entry in bundle.get('entry', [])]
         
         # Evaluate each patient
         initial_population = []

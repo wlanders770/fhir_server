@@ -48,8 +48,14 @@ services:
       - hapi
     environment:
       - FHIR_BASE_URL=http://hapi-fhir:8080/fhir
+      - OLLAMA_BASE_URL=http://fhir-ollama:11434
+      - OLLAMA_MODEL=mistral:7b
+      - OLLAMA_EMBEDDING_MODEL=nomic-embed-text
     ports:
       - "5000:5000"
+    volumes:
+      - chroma_data:/app/chroma_db
 
 volumes:
   db_data:
+  chroma_data:
